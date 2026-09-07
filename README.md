@@ -9,6 +9,7 @@
 This mod is a major fork from **Ciptik's** original source code, focusing on keyboard-driven navigation efficiency, a dual profile (*Snapshot*) system, cleanly categorized items, and DLL proxy stability for full compatibility with other popular modifications.
 
 ---
+![Screenshoot-edAutoMarketv2](https://github.com/CuedNub/edAutoMarketv2/blob/main/screenshot.jpg?raw=true)
 
 ## ✨ Key Features (v2.0)
 
