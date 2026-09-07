@@ -1,1 +1,20 @@
+# Folder Kompilasi
 build/
+bin/
+out/
+
+# File Hasil Compile (Binary/Executable)
+*.dll
+*.exe
+*.a
+*.lib
+*.obj
+*.o
+
+# File Konfigurasi Runtime Lokal
+*.ini
+*.log
+
+# VS Code / IDE Temp files
+.vscode/
+.idea/

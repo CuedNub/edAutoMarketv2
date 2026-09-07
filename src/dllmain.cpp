@@ -1,403 +1,241 @@
+extern "C" int __mingw_SEH_error_handler(void*, void*, void*, void*) { return 1; }
 #include <algorithm>
 #include <cstring>
-#include <format>
-#include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
-#include <cmath>
-#include <locale>
-#include <codecvt>
-#include <map>
 #include <chrono>
 
 #include <Windows.h>
 #include <ddraw.h>
 
 #include "MinHook.h"
-
 #include "log.hpp"
 #include "internal.hpp"
 #include "menu.hpp"
+#include "config.hpp"
+
+// Mengambil modul ddraw asli dari Windows System32 secara dinamis
+static HMODULE GetRealDDraw() {
+    static HMODULE hReal = []() {
+        wchar_t path[MAX_PATH];
+        GetSystemDirectoryW(path, MAX_PATH);
+        std::wstring ddrawPath = std::wstring(path) + L"\\ddraw.dll";
+        return LoadLibraryW(ddrawPath.c_str());
+    }();
+    return hReal;
+}
+
+// === EXPORT RESMI PROXY DDRAW (Sesuai dengan ddraw.h Windows SDK) ===
+extern "C" __declspec(dllexport) HRESULT WINAPI DirectDrawCreate(GUID* lpGUID, LPDIRECTDRAW* lplpDD, IUnknown* pUnkOuter) {
+    typedef HRESULT (WINAPI *Fn)(GUID*, LPDIRECTDRAW*, IUnknown*);
+    static Fn realFn = (Fn)GetProcAddress(GetRealDDraw(), "DirectDrawCreate");
+    return realFn(lpGUID, lplpDD, pUnkOuter);
+}
+
+extern "C" __declspec(dllexport) HRESULT WINAPI DirectDrawCreateEx(GUID* lpGUID, LPVOID* lplpDD, REFIID iid, IUnknown* pUnkOuter) {
+    typedef HRESULT (WINAPI *Fn)(GUID*, LPVOID*, REFIID, IUnknown*);
+    static Fn realFn = (Fn)GetProcAddress(GetRealDDraw(), "DirectDrawCreateEx");
+    return realFn(lpGUID, lplpDD, iid, pUnkOuter);
+}
+
+extern "C" __declspec(dllexport) HRESULT WINAPI DirectDrawEnumerateA(LPDDENUMCALLBACKA lpCallback, LPVOID lpContext) {
+    typedef HRESULT (WINAPI *Fn)(LPDDENUMCALLBACKA, LPVOID);
+    static Fn realFn = (Fn)GetProcAddress(GetRealDDraw(), "DirectDrawEnumerateA");
+    return realFn(lpCallback, lpContext);
+}
+
+extern "C" __declspec(dllexport) HRESULT WINAPI DirectDrawEnumerateW(LPDDENUMCALLBACKW lpCallback, LPVOID lpContext) {
+    typedef HRESULT (WINAPI *Fn)(LPDDENUMCALLBACKW, LPVOID);
+    static Fn realFn = (Fn)GetProcAddress(GetRealDDraw(), "DirectDrawEnumerateW");
+    return realFn(lpCallback, lpContext);
+}
 
 typedef HWND (WINAPI *CreateWindowExAFn)(
-    DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName,
-    DWORD dwStyle, int x, int y, int nWidth, int nHeight,
-    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam
-);
+    DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
 typedef HWND (WINAPI *CreateWindowExWFn)(
-    DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName,
-    DWORD dwStyle, int x, int y, int nWidth, int nHeight,
-    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam
-);
-
+    DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
 typedef HRESULT (WINAPI *DirectDrawCreateFn)(GUID*, IDirectDraw**, IUnknown*);
 typedef HRESULT (WINAPI *CreateSurfaceFn)(IDirectDraw*, LPDDSURFACEDESC, LPDIRECTDRAWSURFACE*, IUnknown*);
 typedef HRESULT (WINAPI *BltFn)(IDirectDrawSurface*, LPCRECT, IDirectDrawSurface*, LPCRECT, DWORD, LPDDBLTFX);
 
-CreateWindowExAFn pCreateWindowExA = nullptr;
-CreateWindowExAFn oCreateWindowExA = nullptr;
-HWND WINAPI MyCreateWindowExA(
-    DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName,
-    DWORD dwStyle, int x, int y, int nWidth, int nHeight,
-    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam
-);
-CreateWindowExWFn pCreateWindowExW = nullptr;
-CreateWindowExWFn oCreateWindowExW = nullptr;
-HWND WINAPI MyCreateWindowExW(
-    DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName,
-    DWORD dwStyle, int x, int y, int nWidth, int nHeight,
-    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam
-);
+CreateWindowExAFn pCreateWindowExA = nullptr, oCreateWindowExA = nullptr;
+CreateWindowExWFn pCreateWindowExW = nullptr, oCreateWindowExW = nullptr;
+DirectDrawCreateFn pDirectDrawCreate = nullptr, oDirectDrawCreate = nullptr;
+CreateSurfaceFn pCreateSurface = nullptr, oCreateSurface = nullptr;
+BltFn pBlt = nullptr, oBlt = nullptr;
+
+HWND WINAPI MyCreateWindowExA(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+HWND WINAPI MyCreateWindowExW(DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+HRESULT WINAPI MyDirectDrawCreate(GUID*, IDirectDraw**, IUnknown*);
+HRESULT STDMETHODCALLTYPE MyCreateSurface(IDirectDraw*, LPDDSURFACEDESC, LPDIRECTDRAWSURFACE*, IUnknown*);
+HRESULT WINAPI MyBlt(IDirectDrawSurface*, LPCRECT, IDirectDrawSurface*, LPCRECT, DWORD, LPDDBLTFX);
 
 WNDPROC oWndProc = nullptr;
 LRESULT __stdcall MyWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-DirectDrawCreateFn pDirectDrawCreate = nullptr;
-DirectDrawCreateFn oDirectDrawCreate = nullptr;
-HRESULT WINAPI MyDirectDrawCreate(GUID* lpGUID, IDirectDraw** lplpDD, IUnknown* pUnkOuter);
-
-CreateSurfaceFn pCreateSurface = nullptr;
-CreateSurfaceFn oCreateSurface = nullptr;
-HRESULT STDMETHODCALLTYPE MyCreateSurface(IDirectDraw* pDirectDraw, LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE* lplpDDSurface, IUnknown* pUnkOuter);
-
-BltFn pBlt = nullptr;
-BltFn oBlt = nullptr;
-HRESULT WINAPI MyBlt(IDirectDrawSurface* pDestSurface, LPCRECT lpDestRect, IDirectDrawSurface* pSrcSurface, LPCRECT lpSrcRect, DWORD dwFlags, LPDDBLTFX lpDDBltFx);
-
-// UDPLogger logger("192.168.1.169", 7878);
 GameInterface driver;
-
-HWND g_hwnd;
-
-std::map<std::string, std::map<std::string, int>> productSettings;
-std::vector<std::string> availableProducts;
-int indexCurrentProduct;
+HWND g_hwnd = nullptr;
 
 std::chrono::time_point<std::chrono::high_resolution_clock> lastTradeTime;
 std::chrono::milliseconds tradingFrequency = std::chrono::milliseconds(100);
 
-std::wstring ConvertToWString(const std::string& str) {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    return converter.from_bytes(str);
-}
+bool wasInGame = false;
 
 bool ContainsWordIgnoreCase(const std::string& str, const std::string& word) {
-    std::string lowerStr = str;
-    std::string lowerWord = word;
-    
-    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), ::tolower);
-    std::transform(lowerWord.begin(), lowerWord.end(), lowerWord.begin(), ::tolower);
-    
-    return lowerStr.find(lowerWord) != std::string::npos;
+    std::string ls = str, lw = word;
+    std::transform(ls.begin(), ls.end(), ls.begin(), ::tolower);
+    std::transform(lw.begin(), lw.end(), lw.begin(), ::tolower);
+    return ls.find(lw) != std::string::npos;
 }
 
-void GetWindowSize(int& width, int& height) {
-    RECT rect;
-    if (GetClientRect(g_hwnd, &rect)) {
-        width = rect.right - rect.left;
-        height = rect.bottom - rect.top;
-    } else {
-        width = 0;
-        height = 0;
+void ExecuteTrade() {
+    bool currentlyInGame = driver.isInGame();
+
+    if (wasInGame && !currentlyInGame) {
+        ConfigManager::Instance().ResetAll();
+        wasInGame = false;
+        return;
     }
+
+    if (!currentlyInGame) {
+        wasInGame = false;
+        return;
+    }
+
+    wasInGame = true;
+
+    auto now = std::chrono::high_resolution_clock::now();
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTradeTime) < tradingFrequency)
+        return;
+
+    auto& cfg = ConfigManager::Instance();
+    const auto& items = cfg.GetItems();
+    for (const auto& item : items) {
+        int count = driver.getNumberProducts(item.name);
+        if (item.saleThreshold > 0 && count > item.saleThreshold)
+            driver.sellProduct(item.name);
+        if (item.buyThreshold > 0 && count < item.buyThreshold)
+            driver.buyProduct(item.name);
+    }
+    lastTradeTime = std::chrono::high_resolution_clock::now();
 }
 
 HRESULT WINAPI MyDirectDrawCreate(GUID* lpGUID, IDirectDraw** lplpDD, IUnknown* pUnkOuter) {
     HRESULT hr = oDirectDrawCreate(lpGUID, lplpDD, pUnkOuter);
-
-    if (!SUCCEEDED(hr) || !lplpDD || !*lplpDD) {
-        // logger.sendMessage("Failed to create IDirectDraw object!");
-        return hr;
-    }
+    if (!SUCCEEDED(hr) || !lplpDD || !*lplpDD) return hr;
 
     void** vTable = *reinterpret_cast<void***>(*lplpDD);
-
-    // Creating a hook on CreateSurface
     pCreateSurface = (CreateSurfaceFn)vTable[6];
 
-    if (MH_CreateHook(pCreateSurface, &MyCreateSurface, reinterpret_cast<void**>(&oCreateSurface)) != MH_OK) {
-        // logger.sendMessage("Failed to create hook for CreateSurface!");
-        return hr;
-    }
+    MH_CreateHook((LPVOID)pCreateSurface, (LPVOID)&MyCreateSurface, reinterpret_cast<void**>(&oCreateSurface));
+    MH_EnableHook((LPVOID)pCreateSurface);
 
-    if (MH_EnableHook(pCreateSurface) != MH_OK) {
-        // logger.sendMessage("Failed to enable hook for CreateSurface!");
-        MH_RemoveHook(pCreateSurface);
-        return hr;
-    }
-
-    // logger.sendMessage("CreateSurface hook enabled!");
-
-    MH_DisableHook(pDirectDrawCreate);
-    MH_RemoveHook(pDirectDrawCreate);
-
+    MH_DisableHook((LPVOID)pDirectDrawCreate);
+    MH_RemoveHook((LPVOID)pDirectDrawCreate);
     return hr;
 }
 
-HRESULT STDMETHODCALLTYPE MyCreateSurface(IDirectDraw* pDirectDraw, LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE* lplpDDSurface, IUnknown* pUnkOuter) {
-    HRESULT hr = oCreateSurface(pDirectDraw, lpDDSurfaceDesc, lplpDDSurface, pUnkOuter);
-
-    if (!SUCCEEDED(hr) || !lplpDDSurface || !*lplpDDSurface) {
-        // logger.sendMessage("Failed to create IDirectDrawSurface object!");
-        return hr;
-    }
-
-    void** vTable = *reinterpret_cast<void***>(*lplpDDSurface);
-
-    // Creating a hook on Blt
+HRESULT STDMETHODCALLTYPE MyCreateSurface(IDirectDraw* pDD, LPDDSURFACEDESC lpDesc, LPDIRECTDRAWSURFACE* lplpSurf, IUnknown* pUnk) {
+    HRESULT hr = oCreateSurface(pDD, lpDesc, lplpSurf, pUnk);
+    if (!SUCCEEDED(hr) || !lplpSurf || !*lplpSurf) return hr;
+    void** vTable = *reinterpret_cast<void***>(*lplpSurf);
     pBlt = (BltFn)vTable[5];
-
-    if (MH_CreateHook(pBlt, &MyBlt, reinterpret_cast<void**>(&oBlt)) != MH_OK) {
-        // logger.sendMessage("Failed to create hook for Blt!");
-        return hr;
-    }
-
-    if (MH_EnableHook(pBlt) != MH_OK) {
-        // logger.sendMessage("Failed to enable hook for Blt!");
-        MH_RemoveHook(pBlt);
-        return hr;
-    }
-
-    // logger.sendMessage("Blt hook enabled!");
-
-    MH_DisableHook(pCreateSurface);
-    MH_RemoveHook(pCreateSurface);
-
+    if (MH_CreateHook((LPVOID)pBlt, (LPVOID)&MyBlt, reinterpret_cast<void**>(&oBlt)) != MH_OK) return hr;
+    if (MH_EnableHook((LPVOID)pBlt) != MH_OK) { MH_RemoveHook((LPVOID)pBlt); return hr; }
+    MH_DisableHook((LPVOID)pCreateSurface);
+    MH_RemoveHook((LPVOID)pCreateSurface);
     return hr;
 }
 
-void ChooseNextProduct() {
-    if (availableProducts.empty()) {
-        // logger.sendMessage("No products available.");
-        return;
-    }
-    indexCurrentProduct = (indexCurrentProduct + 1) % availableProducts.size();
-}
-
-void ChoosePrevProduct() {
-    if (availableProducts.empty()) {
-        // logger.sendMessage("No products available.");
-        return;
-    }
-    indexCurrentProduct = (indexCurrentProduct - 1 + availableProducts.size()) % availableProducts.size();
-}
-
-void ResetAllSettings() {
-    indexCurrentProduct = 0;
-
-    for (const auto& product : availableProducts) {
-        productSettings[product]["sale"] = 500;
-        productSettings[product]["buy"] = 0;
-    }
-}
-
-std::chrono::milliseconds GetTimeSinceLastTtrade() {
-    auto start = lastTradeTime;
-    auto current = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(current - start);
-}
-
-void ExecuteTrade() {
-    if (GetTimeSinceLastTtrade() >= tradingFrequency) {
-        for (const auto& [productName, info] : productSettings) {
-            int sale = info.at("sale");
-            int buy = info.at("buy");
-
-            int numberProduct = driver.getNumberProducts(productName);
-
-            if (numberProduct > sale) {
-                driver.sellProduct(productName);
-            }
-
-            if (numberProduct < buy) {
-                driver.buyProduct(productName);
-            }
-        }
-
-        lastTradeTime = std::chrono::high_resolution_clock::now();
-    }
-}
-
-HRESULT WINAPI MyBlt(IDirectDrawSurface* pDestSurface, LPCRECT lpDestRect, IDirectDrawSurface* pSrcSurface, LPCRECT lpSrcRect, DWORD dwFlags, LPDDBLTFX lpDDBltFx) {
+HRESULT WINAPI MyBlt(IDirectDrawSurface* pDest, LPCRECT lpDestRect, IDirectDrawSurface* pSrc, LPCRECT lpSrcRect, DWORD dwFlags, LPDDBLTFX lpDDBltFx) {
     ExecuteTrade();
-
-    HRESULT hr = oBlt(pDestSurface, lpDestRect, pSrcSurface, lpSrcRect, dwFlags, lpDDBltFx);
-
-    if (FAILED(hr))
-        return hr;
-
-    if (!Menu::IsOpenMenu())
-        return hr;
-
+    HRESULT hr = oBlt(pDest, lpDestRect, pSrc, lpSrcRect, dwFlags, lpDDBltFx);
+    if (FAILED(hr)) return hr;
+    if (!Menu::IsVisible()) return hr;
     HDC hDC;
-
-    if (!SUCCEEDED(pDestSurface->GetDC(&hDC)))
-        return E_FAIL;
-
-    std::string currentProductName = availableProducts[indexCurrentProduct];
-
+    if (!SUCCEEDED(pDest->GetDC(&hDC))) return E_FAIL;
     Menu::SetContext(hDC);
-    Menu::DrawBackground(RECT{0, 0, 300, 139});
-    Menu::DrawTextField(RECT{5, 5, 95, 34}, L"product");
-    Menu::DrawTextField(RECT{99, 5, 294, 34}, ConvertToWString(currentProductName).c_str(), TEXT_ALIGN_LEFT);
-    Menu::DrawTextField(RECT{5, 38, 95, 67}, L"sale >");
-    Menu::DrawNumericField(RECT{99, 38, 294, 67}, RECT{210, 40, 249, 65}, RECT{253, 40, 292, 65}, productSettings[currentProductName]["sale"], 0, 500);
-    Menu::DrawTextField(RECT{5, 71, 95, 100}, L"buy <");
-    Menu::DrawNumericField(RECT{99, 71, 294, 100}, RECT{210, 73, 249, 98}, RECT{253, 73, 292, 98}, productSettings[currentProductName]["buy"], 0, 500);
-    Menu::DrawButton(RECT{5, 104, 186, 133}, L"reset all settings", ResetAllSettings);
-    Menu::DrawButton(RECT{190, 104, 239, 133}, L"←", ChoosePrevProduct);
-    Menu::DrawButton(RECT{243, 104, 292, 133}, L"→", ChooseNextProduct);
-
-    pDestSurface->ReleaseDC(hDC);
-
+    Menu::Draw();
+    pDest->ReleaseDC(hDC);
     return hr;
 }
 
 bool MainInit(HWND hwnd) {
+    g_hwnd = hwnd;
     Menu::Init(g_hwnd);
-    availableProducts = driver.getAvailableProducts();
-    ResetAllSettings();
+    wchar_t cwd[MAX_PATH];
+    GetCurrentDirectoryW(MAX_PATH, cwd);
+    std::wstring iniPath = std::wstring(cwd) + L"\\automarket.ini";
+    ConfigManager::Instance().Load(iniPath);
     lastTradeTime = std::chrono::high_resolution_clock::now();
-
-    // logger.sendMessage("Setting new window procedure...");
+    wasInGame = false;
     oWndProc = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)MyWndProc);
-    if (!oWndProc) {
-        // logger.sendMessage("Failed to set new window procedure.");
-        return false;
-    }
-
-    // logger.sendMessage("Initialization completed successfully.");
-    return true;
+    return oWndProc != nullptr;
 }
 
-HWND WINAPI MyCreateWindowExA(
-    DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName,
+HWND WINAPI MyCreateWindowExA(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName,
     DWORD dwStyle, int x, int y, int nWidth, int nHeight,
-    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam
-) {
+    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
     HWND hwnd = oCreateWindowExA(dwExStyle, lpClassName, lpWindowName,
-                                 dwStyle, x, y, nWidth, nHeight,
-                                 hWndParent, hMenu, hInstance, lpParam);
-
-    if (hwnd != NULL && !g_hwnd) {
-        char windowTitle[256];
-        GetWindowTextA(hwnd, windowTitle, sizeof(windowTitle));
-
-        std::string titleString(windowTitle);
-
-        // logger.sendMessage("Create window: " + titleString);
-
-        if (ContainsWordIgnoreCase(windowTitle, "Crusader")) {
-            g_hwnd = hwnd;
-
-            // logger.sendMessage("Crusader find!");
-
+                                 dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    if (hwnd && !g_hwnd) {
+        char title[256];
+        GetWindowTextA(hwnd, title, sizeof(title));
+        if (ContainsWordIgnoreCase(title, "Crusader")) {
             MainInit(hwnd);
-
-            MH_DisableHook(pCreateWindowExW);
-            MH_RemoveHook(pCreateWindowExW);
-
-            MH_DisableHook(pCreateWindowExA);
-            MH_RemoveHook(pCreateWindowExA);
+            MH_DisableHook((LPVOID)pCreateWindowExW); MH_RemoveHook((LPVOID)pCreateWindowExW);
+            MH_DisableHook((LPVOID)pCreateWindowExA); MH_RemoveHook((LPVOID)pCreateWindowExA);
         }
     }
-
     return hwnd;
 }
 
-HWND WINAPI MyCreateWindowExW(
-    DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName,
+HWND WINAPI MyCreateWindowExW(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName,
     DWORD dwStyle, int x, int y, int nWidth, int nHeight,
-    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam
-) {
+    HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
     HWND hwnd = oCreateWindowExW(dwExStyle, lpClassName, lpWindowName,
-                                 dwStyle, x, y, nWidth, nHeight,
-                                 hWndParent, hMenu, hInstance, lpParam);
-
-    if (hwnd != NULL && !g_hwnd) {
-        wchar_t windowTitleW[256];
-        GetWindowTextW(hwnd, windowTitleW, sizeof(windowTitleW) / sizeof(wchar_t));
-
-        // Преобразование Unicode строки в ANSI строку
-        char windowTitle[256];
-        WideCharToMultiByte(CP_ACP, 0, windowTitleW, -1, windowTitle, sizeof(windowTitle), NULL, NULL);
-
-        std::string titleString(windowTitle);
-
-        // logger.sendMessage("Create window: " + titleString);
-
-        if (ContainsWordIgnoreCase(windowTitle, "Crusader")) {
-            g_hwnd = hwnd;
-
-            // logger.sendMessage("Crusader find!");
-
+                                 dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    if (hwnd && !g_hwnd) {
+        wchar_t titleW[256];
+        GetWindowTextW(hwnd, titleW, 256);
+        char title[256];
+        WideCharToMultiByte(CP_ACP, 0, titleW, -1, title, 256, NULL, NULL);
+        if (ContainsWordIgnoreCase(title, "Crusader")) {
             MainInit(hwnd);
-
-            MH_DisableHook(pCreateWindowExW);
-            MH_RemoveHook(pCreateWindowExW);
-
-            MH_DisableHook(pCreateWindowExA);
-            MH_RemoveHook(pCreateWindowExA);
+            MH_DisableHook((LPVOID)pCreateWindowExW); MH_RemoveHook((LPVOID)pCreateWindowExW);
+            MH_DisableHook((LPVOID)pCreateWindowExA); MH_RemoveHook((LPVOID)pCreateWindowExA);
         }
     }
-
     return hwnd;
 }
 
 bool SetupHooks() {
-    if (MH_Initialize() != MH_OK)
-        return false;
+    if (MH_Initialize() != MH_OK) return false;
 
-    // Creating a hook on DirectDrawCreate
-    HMODULE hDdraw = LoadLibraryA("ddraw.dll");
+    HMODULE hDdraw = GetRealDDraw();
+    if (!hDdraw) return false;
 
-    if (!hDdraw)
-        return false;
-    
     pDirectDrawCreate = (DirectDrawCreateFn)GetProcAddress(hDdraw, "DirectDrawCreate");
+    if (!pDirectDrawCreate) return false;
 
-    if (!pDirectDrawCreate)
+    if (MH_CreateHook((LPVOID)pDirectDrawCreate, (LPVOID)&MyDirectDrawCreate, reinterpret_cast<void**>(&oDirectDrawCreate)) != MH_OK)
         return false;
-    
-    if (MH_CreateHook(pDirectDrawCreate, &MyDirectDrawCreate, reinterpret_cast<void**>(&oDirectDrawCreate)) != MH_OK)
-        return false;
-    
-    if (MH_EnableHook(pDirectDrawCreate) != MH_OK) {
-        MH_RemoveHook(pDirectDrawCreate);
-        return false;
-    }
-    
-    // Creating a window creation hook
+
+    if (MH_EnableHook((LPVOID)pDirectDrawCreate) != MH_OK) return false;
+
     HMODULE hUser32 = GetModuleHandleA("user32.dll");
-
-    if (!hUser32)
-        return false;
+    if (!hUser32) return false;
 
     pCreateWindowExA = (CreateWindowExAFn)GetProcAddress(hUser32, "CreateWindowExA");
-
-    if (!pCreateWindowExA)
-        return false;
-
-    if (MH_CreateHook(pCreateWindowExA, &MyCreateWindowExA, reinterpret_cast<void**>(&oCreateWindowExA)) != MH_OK)
-        return false;
-
-    if (MH_EnableHook(pCreateWindowExA) != MH_OK) {
-        MH_RemoveHook(pCreateWindowExA);
-        return false;
+    if (pCreateWindowExA) {
+        MH_CreateHook((LPVOID)pCreateWindowExA, (LPVOID)&MyCreateWindowExA, reinterpret_cast<void**>(&oCreateWindowExA));
+        MH_EnableHook((LPVOID)pCreateWindowExA);
     }
 
     pCreateWindowExW = (CreateWindowExWFn)GetProcAddress(hUser32, "CreateWindowExW");
-
-    if (!pCreateWindowExW)
-        return false;
-    
-    if (MH_CreateHook(pCreateWindowExW, &MyCreateWindowExW, reinterpret_cast<void**>(&oCreateWindowExW)) != MH_OK)
-        return false;
-
-    if (MH_EnableHook(pCreateWindowExW) != MH_OK) {
-        MH_RemoveHook(pCreateWindowExW);
-        return false;
+    if (pCreateWindowExW) {
+        MH_CreateHook((LPVOID)pCreateWindowExW, (LPVOID)&MyCreateWindowExW, reinterpret_cast<void**>(&oCreateWindowExW));
+        MH_EnableHook((LPVOID)pCreateWindowExW);
     }
 
     return true;
@@ -414,12 +252,8 @@ LRESULT __stdcall MyWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
-    case DLL_PROCESS_ATTACH:
-        SetupHooks();
-        break;
-    case DLL_PROCESS_DETACH:
-        CleanupHooks();
-        break;
+    case DLL_PROCESS_ATTACH: SetupHooks(); break;
+    case DLL_PROCESS_DETACH: CleanupHooks(); break;
     }
     return TRUE;
 }

@@ -12,6 +12,7 @@ public:
     int getNumberProducts(const std::string& productName);
     void buyProduct(const std::string& productName);
     void sellProduct(const std::string& productName);
+    bool isInGame();
 
 private:
     uintptr_t marketIdAddress = 0;

@@ -69,3 +69,7 @@ std::vector<std::string> GameInterface::getAvailableProducts() const {
 GameInterface::GameInterface() {
     initializeAddresses();
 }
+
+bool GameInterface::isInGame() {
+    return HasMarket(GetPlayerId());
+}
