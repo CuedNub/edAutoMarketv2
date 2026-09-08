@@ -113,7 +113,7 @@ namespace Menu {
             }
             if (ConfigManager::CheckHotkey(cfg.GetReloadConfig())) {
                 cfg.Load(cfg.GetIniPath());
-                ReloadUI(); // Terapkan font dan warna baru
+                ReloadUI();
                 if (isMenuActive) ShowNotif(L"Config Reloaded!", 1200);
                 return 0;
             }
@@ -126,10 +126,25 @@ namespace Menu {
 
             if (ConfigManager::CheckHotkey(cfg.GetSaveConfig())) {
                 ApplyEdit();
-                cfg.Save(cfg.GetIniPath()); // Simpan warna & layout ke .ini jika ada perubahan baru
+                cfg.Save(cfg.GetIniPath());
                 cfg.SaveSnapshot();
                 ShowNotif(L"Saved!", 1500);
                 pendingClose = true;
+                return 0;
+            }
+
+            if (ConfigManager::CheckHotkey(cfg.GetResetAll())) {
+                auto now = std::chrono::high_resolution_clock::now();
+                if (resetConfirm &&
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - resetTime).count() < 2000) {
+                    cfg.ResetAll();
+                    resetConfirm = false;
+                    ShowNotif(L"Reset!", 1200);
+                } else {
+                    resetConfirm = true;
+                    resetTime = now;
+                    ShowNotif(L"Press CTRL+R again to confirm", 2000);
+                }
                 return 0;
             }
 
@@ -139,12 +154,16 @@ namespace Menu {
                 if (wParam == VK_BACK) { if (!editBuffer.empty()) editBuffer.pop_back(); return 0; }
                 if (wParam == VK_DELETE) { editBuffer.clear(); return 0; }
                 if (wParam == VK_RETURN) { ApplyEdit(); return 0; }
-                if (wParam == VK_ESCAPE) { isEditing = false; return 0; }
+                if (wParam == VK_ESCAPE) { isEditing = false; editBuffer = L""; return 0; }
+                if (wParam == VK_LEFT)   { ApplyEdit(); selectedCol = 0; return 0; }
+                if (wParam == VK_RIGHT)  { ApplyEdit(); selectedCol = 1; return 0; }
                 if (wParam == VK_TAB)    { ApplyEdit(); selectedCol = 1 - selectedCol; return 0; }
             } else {
-                if (wParam == VK_UP)   { if (selectedRow > 0) selectedRow--; return 0; }
-                if (wParam == VK_DOWN) { if (selectedRow < total - 1) selectedRow++; return 0; }
-                if (wParam == VK_TAB)  { selectedCol = 1 - selectedCol; return 0; }
+                if (wParam == VK_UP)    { if (selectedRow > 0) selectedRow--; return 0; }
+                if (wParam == VK_DOWN)  { if (selectedRow < total - 1) selectedRow++; return 0; }
+                if (wParam == VK_LEFT)  { selectedCol = 0; return 0; }
+                if (wParam == VK_RIGHT) { selectedCol = 1; return 0; }
+                if (wParam == VK_TAB)   { selectedCol = 1 - selectedCol; return 0; }
                 if (wParam >= '0' && wParam <= '9') {
                     if (selectedRow >= 0 && selectedRow < total) { isEditing = true; editBuffer = (wchar_t)wParam; }
                     return 0;
