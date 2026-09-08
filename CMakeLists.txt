@@ -22,9 +22,7 @@ target_link_libraries(automarket PRIVATE minhook
 
 target_include_directories(automarket PUBLIC
                       "${PROJECT_SOURCE_DIR}/src"
-                      "${PROJECT_SOURCE_DIR}/src/menu"
                       "${PROJECT_SOURCE_DIR}/src/include"
-                      "${PROJECT_SOURCE_DIR}/src/include/directx"
 )
 
 target_compile_options(automarket PUBLIC -fpermissive -static -static-libgcc -static-libstdc++)

@@ -14,7 +14,6 @@ extern "C" int __mingw_SEH_error_handler(void*, void*, void*, void*) { return 1;
 #include "menu.hpp"
 #include "config.hpp"
 
-// Mengambil modul ddraw asli dari Windows System32 secara dinamis
 static HMODULE GetRealDDraw() {
     static HMODULE hReal = []() {
         wchar_t path[MAX_PATH];
@@ -25,7 +24,6 @@ static HMODULE GetRealDDraw() {
     return hReal;
 }
 
-// === EXPORT RESMI PROXY DDRAW (Sesuai dengan ddraw.h Windows SDK) ===
 extern "C" __declspec(dllexport) HRESULT WINAPI DirectDrawCreate(GUID* lpGUID, LPDIRECTDRAW* lplpDD, IUnknown* pUnkOuter) {
     typedef HRESULT (WINAPI *Fn)(GUID*, LPDIRECTDRAW*, IUnknown*);
     static Fn realFn = (Fn)GetProcAddress(GetRealDDraw(), "DirectDrawCreate");
@@ -77,7 +75,6 @@ GameInterface driver;
 HWND g_hwnd = nullptr;
 
 std::chrono::time_point<std::chrono::high_resolution_clock> lastTradeTime;
-std::chrono::milliseconds tradingFrequency = std::chrono::milliseconds(100);
 
 bool wasInGame = false;
 
@@ -105,7 +102,10 @@ void ExecuteTrade() {
     wasInGame = true;
 
     auto now = std::chrono::high_resolution_clock::now();
-    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTradeTime) < tradingFrequency)
+    int freqMs = ConfigManager::Instance().GetTradeFrequency();
+    if (freqMs <= 0) freqMs = 100;
+
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTradeTime).count() < freqMs)
         return;
 
     auto& cfg = ConfigManager::Instance();
@@ -149,24 +149,33 @@ HRESULT STDMETHODCALLTYPE MyCreateSurface(IDirectDraw* pDD, LPDDSURFACEDESC lpDe
 
 HRESULT WINAPI MyBlt(IDirectDrawSurface* pDest, LPCRECT lpDestRect, IDirectDrawSurface* pSrc, LPCRECT lpSrcRect, DWORD dwFlags, LPDDBLTFX lpDDBltFx) {
     ExecuteTrade();
-    HRESULT hr = oBlt(pDest, lpDestRect, pSrc, lpSrcRect, dwFlags, lpDDBltFx);
-    if (FAILED(hr)) return hr;
-    if (!Menu::IsVisible()) return hr;
-    HDC hDC;
-    if (!SUCCEEDED(pDest->GetDC(&hDC))) return E_FAIL;
-    Menu::SetContext(hDC);
-    Menu::Draw();
-    pDest->ReleaseDC(hDC);
-    return hr;
+
+    // Gambar menu pada Backbuffer (pSrc) SEBELUM Blt dilakukan.
+    if (Menu::IsVisible()) {
+        IDirectDrawSurface* targetSurf = pSrc ? pSrc : pDest;
+        if (targetSurf) {
+            HDC hDC = nullptr;
+            if (SUCCEEDED(targetSurf->GetDC(&hDC)) && hDC) {
+                Menu::SetContext(hDC);
+                Menu::Draw();
+                targetSurf->ReleaseDC(hDC);
+            }
+        }
+    }
+
+    return oBlt(pDest, lpDestRect, pSrc, lpSrcRect, dwFlags, lpDDBltFx);
 }
 
 bool MainInit(HWND hwnd) {
     g_hwnd = hwnd;
-    Menu::Init(g_hwnd);
     wchar_t cwd[MAX_PATH];
     GetCurrentDirectoryW(MAX_PATH, cwd);
     std::wstring iniPath = std::wstring(cwd) + L"\\automarket.ini";
+    
+    // Wajib dibaca sebelum Menu::Init
     ConfigManager::Instance().Load(iniPath);
+    Menu::Init(g_hwnd);
+
     lastTradeTime = std::chrono::high_resolution_clock::now();
     wasInGame = false;
     oWndProc = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)MyWndProc);

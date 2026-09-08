@@ -1,20 +1,20 @@
-# Folder Kompilasi
+# Build outputs
 build/
 bin/
 out/
-
-# File Hasil Compile (Binary/Executable)
 *.dll
 *.exe
 *.a
 *.lib
 *.obj
 *.o
+*.zip
 
-# File Konfigurasi Runtime Lokal
+# Runtime & Local Configs
 *.ini
 *.log
+listen_log.py
 
-# VS Code / IDE Temp files
+# IDE / Editor
 .vscode/
 .idea/

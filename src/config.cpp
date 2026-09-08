@@ -8,8 +8,7 @@ ConfigManager& ConfigManager::Instance() {
     return instance;
 }
 
-ConfigManager::ConfigManager()
-    : m_defaultSale(500), m_defaultBuy(0), m_weaponCount(0) {
+ConfigManager::ConfigManager() : m_defaultSale(500), m_defaultBuy(0), m_weaponCount(0), m_tradeFrequency(100) {
     m_toggleMenu    = { 0x4D, false, false };
     m_saveConfig    = { 0x53, true,  true  };
     m_loadSnapshot  = { 0x4C, true,  true  };
@@ -53,82 +52,104 @@ std::wstring ConfigManager::ReadString(const wchar_t* section, const wchar_t* ke
     return std::wstring(buf);
 }
 
+COLORREF ConfigManager::ReadColor(const wchar_t* section, const wchar_t* key, COLORREF defaultColor, const std::wstring& path) {
+    std::wstring s = ReadString(section, key, L"", path);
+    if (s.empty()) return defaultColor;
+    int r = 0, g = 0, b = 0;
+    if (swscanf(s.c_str(), L"%d,%d,%d", &r, &g, &b) == 3) {
+        return RGB(r, g, b);
+    }
+    return defaultColor;
+}
+
+void ConfigManager::WriteColor(const wchar_t* section, const wchar_t* key, COLORREF color, const std::wstring& path) {
+    std::wstring s = std::to_wstring(GetRValue(color)) + L"," + std::to_wstring(GetGValue(color)) + L"," + std::to_wstring(GetBValue(color));
+    WritePrivateProfileStringW(section, key, s.c_str(), path.c_str());
+}
+
 void ConfigManager::LoadItemThresholds(const std::wstring& path) {
-    const wchar_t* weaponKeys[] = {
-        L"Bows", L"Crossbows", L"LeatherArmor", L"Maces", L"MetalArmor", L"Pikes", L"Spears", L"Swords"
-    };
+    const wchar_t* weaponKeys[] = {L"Bows", L"Crossbows", L"LeatherArmor", L"Maces", L"MetalArmor", L"Pikes", L"Spears", L"Swords"};
     for (int i = 0; i < m_weaponCount; i++) {
         std::wstring val = ReadString(L"Weapons", weaponKeys[i], L"", path);
         if (!val.empty()) {
-            int sale = m_defaultSale, buy = m_defaultBuy;
-            swscanf(val.c_str(), L"%d,%d", &sale, &buy);
-            m_items[i].saleThreshold = sale;
-            m_items[i].buyThreshold = buy;
+            swscanf(val.c_str(), L"%d,%d", &m_items[i].saleThreshold, &m_items[i].buyThreshold);
         }
     }
-    const wchar_t* resKeys[] = {
-        L"Ale", L"Bread", L"Cheese", L"Flour", L"Fruit", L"Hops",
-        L"Iron", L"Meat", L"Pitch", L"Stone", L"Wheat", L"Wood"
-    };
+    const wchar_t* resKeys[] = {L"Ale", L"Bread", L"Cheese", L"Flour", L"Fruit", L"Hops", L"Iron", L"Meat", L"Pitch", L"Stone", L"Wheat", L"Wood"};
     int resCount = (int)m_items.size() - m_weaponCount;
     for (int i = 0; i < resCount; i++) {
         std::wstring val = ReadString(L"Resources", resKeys[i], L"", path);
         if (!val.empty()) {
-            int sale = m_defaultSale, buy = m_defaultBuy;
-            swscanf(val.c_str(), L"%d,%d", &sale, &buy);
-            m_items[m_weaponCount + i].saleThreshold = sale;
-            m_items[m_weaponCount + i].buyThreshold = buy;
+            swscanf(val.c_str(), L"%d,%d", &m_items[m_weaponCount+i].saleThreshold, &m_items[m_weaponCount+i].buyThreshold);
         }
     }
 }
 
 void ConfigManager::SaveItemThresholds(const std::wstring& path) {
-    const wchar_t* weaponKeys[] = {
-        L"Bows", L"Crossbows", L"LeatherArmor", L"Maces", L"MetalArmor", L"Pikes", L"Spears", L"Swords"
-    };
+    const wchar_t* weaponKeys[] = {L"Bows", L"Crossbows", L"LeatherArmor", L"Maces", L"MetalArmor", L"Pikes", L"Spears", L"Swords"};
     for (int i = 0; i < m_weaponCount; i++) {
         std::wstring val = std::to_wstring(m_items[i].saleThreshold) + L"," + std::to_wstring(m_items[i].buyThreshold);
         WritePrivateProfileStringW(L"Weapons", weaponKeys[i], val.c_str(), path.c_str());
     }
-    const wchar_t* resKeys[] = {
-        L"Ale", L"Bread", L"Cheese", L"Flour", L"Fruit", L"Hops",
-        L"Iron", L"Meat", L"Pitch", L"Stone", L"Wheat", L"Wood"
-    };
+    const wchar_t* resKeys[] = {L"Ale", L"Bread", L"Cheese", L"Flour", L"Fruit", L"Hops", L"Iron", L"Meat", L"Pitch", L"Stone", L"Wheat", L"Wood"};
     int resCount = (int)m_items.size() - m_weaponCount;
     for (int i = 0; i < resCount; i++) {
-        std::wstring val = std::to_wstring(m_items[m_weaponCount + i].saleThreshold) + L"," + std::to_wstring(m_items[m_weaponCount + i].buyThreshold);
+        std::wstring val = std::to_wstring(m_items[m_weaponCount+i].saleThreshold) + L"," + std::to_wstring(m_items[m_weaponCount+i].buyThreshold);
         WritePrivateProfileStringW(L"Resources", resKeys[i], val.c_str(), path.c_str());
     }
 }
 
 void ConfigManager::Load(const std::wstring& iniPath) {
     m_iniPath = iniPath;
-
     wchar_t dir[MAX_PATH];
     lstrcpynW(dir, iniPath.c_str(), MAX_PATH);
-    wchar_t* lastSlash = wcsrchr(dir, L'\\');
-    if (lastSlash) *(lastSlash + 1) = L'\0';
+    if (wchar_t* lastSlash = wcsrchr(dir, L'\\')) *(lastSlash + 1) = L'\0';
     m_savePath = std::wstring(dir) + L"automarketsave.ini";
 
-    m_toggleMenu.vkCode  = ReadInt(L"Hotkeys", L"ToggleMenu", 0x4D, m_iniPath);
-    m_toggleMenu.ctrl    = ReadInt(L"Hotkeys", L"ToggleMenu_Ctrl", 0, m_iniPath) != 0;
-    m_toggleMenu.shift   = ReadInt(L"Hotkeys", L"ToggleMenu_Shift", 0, m_iniPath) != 0;
+    // Hotkeys
+    m_toggleMenu.vkCode = ReadInt(L"Hotkeys", L"ToggleMenu", 0x4D, m_iniPath);
+    m_toggleMenu.ctrl = ReadInt(L"Hotkeys", L"ToggleMenu_Ctrl", 0, m_iniPath);
+    m_toggleMenu.shift = ReadInt(L"Hotkeys", L"ToggleMenu_Shift", 0, m_iniPath);
 
-    m_saveConfig.vkCode  = ReadInt(L"Hotkeys", L"SaveConfig", 0x53, m_iniPath);
-    m_saveConfig.ctrl    = ReadInt(L"Hotkeys", L"SaveConfig_Ctrl", 1, m_iniPath) != 0;
-    m_saveConfig.shift   = ReadInt(L"Hotkeys", L"SaveConfig_Shift", 1, m_iniPath) != 0;
+    m_saveConfig.vkCode = ReadInt(L"Hotkeys", L"SaveConfig", 0x53, m_iniPath);
+    m_saveConfig.ctrl = ReadInt(L"Hotkeys", L"SaveConfig_Ctrl", 1, m_iniPath);
+    m_saveConfig.shift = ReadInt(L"Hotkeys", L"SaveConfig_Shift", 1, m_iniPath);
 
-    m_loadSnapshot.vkCode  = ReadInt(L"Hotkeys", L"LoadSnapshot", 0x4C, m_iniPath);
-    m_loadSnapshot.ctrl    = ReadInt(L"Hotkeys", L"LoadSnapshot_Ctrl", 1, m_iniPath) != 0;
-    m_loadSnapshot.shift   = ReadInt(L"Hotkeys", L"LoadSnapshot_Shift", 1, m_iniPath) != 0;
+    m_loadSnapshot.vkCode = ReadInt(L"Hotkeys", L"LoadSnapshot", 0x4C, m_iniPath);
+    m_loadSnapshot.ctrl = ReadInt(L"Hotkeys", L"LoadSnapshot_Ctrl", 1, m_iniPath);
+    m_loadSnapshot.shift = ReadInt(L"Hotkeys", L"LoadSnapshot_Shift", 1, m_iniPath);
 
-    m_resetAll.vkCode    = ReadInt(L"Hotkeys", L"ResetAll", 0x52, m_iniPath);
-    m_resetAll.ctrl      = ReadInt(L"Hotkeys", L"ResetAll_Ctrl", 1, m_iniPath) != 0;
-    m_resetAll.shift     = ReadInt(L"Hotkeys", L"ResetAll_Shift", 0, m_iniPath) != 0;
+    m_resetAll.vkCode = ReadInt(L"Hotkeys", L"ResetAll", 0x52, m_iniPath);
+    m_resetAll.ctrl = ReadInt(L"Hotkeys", L"ResetAll_Ctrl", 1, m_iniPath);
+    m_resetAll.shift = ReadInt(L"Hotkeys", L"ResetAll_Shift", 0, m_iniPath);
 
-    m_reloadConfig.vkCode  = ReadInt(L"Hotkeys", L"ReloadConfig", 0x4C, m_iniPath);
-    m_reloadConfig.ctrl    = ReadInt(L"Hotkeys", L"ReloadConfig_Ctrl", 1, m_iniPath) != 0;
-    m_reloadConfig.shift   = ReadInt(L"Hotkeys", L"ReloadConfig_Shift", 0, m_iniPath) != 0;
+    m_reloadConfig.vkCode = ReadInt(L"Hotkeys", L"ReloadConfig", 0x4C, m_iniPath);
+    m_reloadConfig.ctrl = ReadInt(L"Hotkeys", L"ReloadConfig_Ctrl", 1, m_iniPath);
+    m_reloadConfig.shift = ReadInt(L"Hotkeys", L"ReloadConfig_Shift", 0, m_iniPath);
+
+    // Advanced
+    m_tradeFrequency = ReadInt(L"Advanced", L"TradeFrequencyMs", 100, m_iniPath);
+
+    // UI
+    m_ui.menuWidth = ReadInt(L"UI", L"MenuWidth", 400, m_iniPath);
+    m_ui.rowHeight = ReadInt(L"UI", L"RowHeight", 22, m_iniPath);
+    m_ui.offsetX = ReadInt(L"UI", L"OffsetX", 0, m_iniPath);
+    m_ui.offsetY = ReadInt(L"UI", L"OffsetY", 0, m_iniPath);
+    m_ui.fontName = ReadString(L"UI", L"FontName", L"Consolas", m_iniPath);
+    m_ui.fontSize = ReadInt(L"UI", L"FontSize", 16, m_iniPath);
+    m_ui.titleSize = ReadInt(L"UI", L"TitleSize", 20, m_iniPath);
+
+    m_ui.bgColor     = ReadColor(L"UI", L"BgColor", RGB(35, 30, 25), m_iniPath);
+    m_ui.headerColor = ReadColor(L"UI", L"HeaderColor", RGB(55, 45, 35), m_iniPath);
+    m_ui.rowColor    = ReadColor(L"UI", L"RowColor", RGB(45, 38, 30), m_iniPath);
+    m_ui.selColor    = ReadColor(L"UI", L"SelColor", RGB(75, 60, 40), m_iniPath);
+    m_ui.editColor   = ReadColor(L"UI", L"EditColor", RGB(90, 80, 40), m_iniPath);
+    m_ui.catColor    = ReadColor(L"UI", L"CatColor", RGB(60, 50, 35), m_iniPath);
+
+    m_ui.textColor     = ReadColor(L"UI", L"TextColor", RGB(220, 200, 160), m_iniPath);
+    m_ui.selTextColor  = ReadColor(L"UI", L"HighlightTextColor", RGB(255, 255, 200), m_iniPath);
+    m_ui.editTextColor = ReadColor(L"UI", L"EditTextColor", RGB(255, 255, 100), m_iniPath);
+    m_ui.titleColor    = ReadColor(L"UI", L"TitleColor", RGB(255, 220, 130), m_iniPath);
 
     m_defaultSale = ReadInt(L"Defaults", L"DefaultSale", 500, m_iniPath);
     m_defaultBuy  = ReadInt(L"Defaults", L"DefaultBuy", 0, m_iniPath);
@@ -145,60 +166,43 @@ void ConfigManager::Load(const std::wstring& iniPath) {
 void ConfigManager::Save(const std::wstring& iniPath) {
     if (iniPath.empty()) return;
 
-    WritePrivateProfileStringW(L"Hotkeys", L"ToggleMenu", std::to_wstring(m_toggleMenu.vkCode).c_str(), iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ToggleMenu_Ctrl", m_toggleMenu.ctrl ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ToggleMenu_Shift", m_toggleMenu.shift ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"SaveConfig", std::to_wstring(m_saveConfig.vkCode).c_str(), iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"SaveConfig_Ctrl", m_saveConfig.ctrl ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"SaveConfig_Shift", m_saveConfig.shift ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"LoadSnapshot", std::to_wstring(m_loadSnapshot.vkCode).c_str(), iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"LoadSnapshot_Ctrl", m_loadSnapshot.ctrl ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"LoadSnapshot_Shift", m_loadSnapshot.shift ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ResetAll", std::to_wstring(m_resetAll.vkCode).c_str(), iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ResetAll_Ctrl", m_resetAll.ctrl ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ResetAll_Shift", m_resetAll.shift ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ReloadConfig", std::to_wstring(m_reloadConfig.vkCode).c_str(), iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ReloadConfig_Ctrl", m_reloadConfig.ctrl ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ReloadConfig_Shift", m_reloadConfig.shift ? L"1" : L"0", iniPath.c_str());
-    WritePrivateProfileStringW(L"Defaults", L"DefaultSale", std::to_wstring(m_defaultSale).c_str(), iniPath.c_str());
-    WritePrivateProfileStringW(L"Defaults", L"DefaultBuy", std::to_wstring(m_defaultBuy).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"Advanced", L"TradeFrequencyMs", std::to_wstring(m_tradeFrequency).c_str(), iniPath.c_str());
+
+    WritePrivateProfileStringW(L"UI", L"MenuWidth", std::to_wstring(m_ui.menuWidth).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"RowHeight", std::to_wstring(m_ui.rowHeight).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"OffsetX", std::to_wstring(m_ui.offsetX).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"OffsetY", std::to_wstring(m_ui.offsetY).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"FontName", m_ui.fontName.c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"FontSize", std::to_wstring(m_ui.fontSize).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"TitleSize", std::to_wstring(m_ui.titleSize).c_str(), iniPath.c_str());
+
+    WriteColor(L"UI", L"BgColor", m_ui.bgColor, iniPath);
+    WriteColor(L"UI", L"HeaderColor", m_ui.headerColor, iniPath);
+    WriteColor(L"UI", L"RowColor", m_ui.rowColor, iniPath);
+    WriteColor(L"UI", L"SelColor", m_ui.selColor, iniPath);
+    WriteColor(L"UI", L"EditColor", m_ui.editColor, iniPath);
+    WriteColor(L"UI", L"CatColor", m_ui.catColor, iniPath);
+    WriteColor(L"UI", L"TextColor", m_ui.textColor, iniPath);
+    WriteColor(L"UI", L"HighlightTextColor", m_ui.selTextColor, iniPath);
+    WriteColor(L"UI", L"EditTextColor", m_ui.editTextColor, iniPath);
+    WriteColor(L"UI", L"TitleColor", m_ui.titleColor, iniPath);
 
     SaveItemThresholds(iniPath);
 }
 
 void ConfigManager::SaveSnapshot() {
-    if (m_savePath.empty()) return;
-    SaveItemThresholds(m_savePath);
+    if (!m_savePath.empty()) SaveItemThresholds(m_savePath);
 }
-
 void ConfigManager::LoadSnapshot() {
-    if (m_savePath.empty()) return;
-    DWORD attr = GetFileAttributesW(m_savePath.c_str());
-    if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
-        LoadItemThresholds(m_savePath);
-    }
+    if (!m_savePath.empty()) LoadItemThresholds(m_savePath);
 }
-
 void ConfigManager::ResetAll() {
-    for (auto& item : m_items) {
-        item.saleThreshold = m_defaultSale;
-        item.buyThreshold = m_defaultBuy;
-    }
+    for (auto& item : m_items) { item.saleThreshold = m_defaultSale; item.buyThreshold = m_defaultBuy; }
 }
-
-void ConfigManager::SetItemSale(int index, int value) {
-    if (index >= 0 && index < (int)m_items.size())
-        m_items[index].saleThreshold = value;
-}
-
-void ConfigManager::SetItemBuy(int index, int value) {
-    if (index >= 0 && index < (int)m_items.size())
-        m_items[index].buyThreshold = value;
-}
-
+void ConfigManager::SetItemSale(int index, int value) { if (index >= 0 && index < (int)m_items.size()) m_items[index].saleThreshold = value; }
+void ConfigManager::SetItemBuy(int index, int value) { if (index >= 0 && index < (int)m_items.size()) m_items[index].buyThreshold = value; }
 bool ConfigManager::CheckHotkey(const HotkeyConfig& hk) {
-    bool ctrlOk  = (GetAsyncKeyState(VK_CONTROL) & 0x8000) ? hk.ctrl : !hk.ctrl;
+    bool ctrlOk = (GetAsyncKeyState(VK_CONTROL) & 0x8000) ? hk.ctrl : !hk.ctrl;
     bool shiftOk = (GetAsyncKeyState(VK_SHIFT) & 0x8000) ? hk.shift : !hk.shift;
-    bool keyOk   = (GetAsyncKeyState(hk.vkCode) & 0x8000) != 0;
-    return keyOk && ctrlOk && shiftOk;
+    return (GetAsyncKeyState(hk.vkCode) & 0x8000) && ctrlOk && shiftOk;
 }
