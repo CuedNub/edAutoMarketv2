@@ -22,3 +22,7 @@ listen_log.py
 # Repomix output
 repomix-output.xml
 repomix-part-*.txt
+
+# Repomix output
+repomix-output.xml
+repomix-part-*.txt
