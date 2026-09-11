@@ -1,0 +1,29 @@
+{
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "topFilesLength": 10,
+    "showLineNumbers": false,
+    "copyToClipboard": false
+  },
+  "include": [
+    "src/**",
+    "CMakeLists.txt",
+    "build.sh",
+    ".gitignore",
+    ".gitmodules",
+    ".repomixignore",
+    "LICENSE"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "src/include/minhook/**",
+      "build/**",
+      "src_backup_*/**"
+    ]
+  }
+}

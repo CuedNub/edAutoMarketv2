@@ -170,7 +170,7 @@ bool MainInit(HWND hwnd) {
     g_hwnd = hwnd;
     wchar_t cwd[MAX_PATH];
     GetCurrentDirectoryW(MAX_PATH, cwd);
-    std::wstring iniPath = std::wstring(cwd) + L"\\automarket.ini";
+    std::wstring iniPath = std::wstring(cwd) + L"\\ddraw.ini";
     
     // Wajib dibaca sebelum Menu::Init
     ConfigManager::Instance().Load(iniPath);

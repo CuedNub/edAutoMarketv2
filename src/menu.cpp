@@ -19,6 +19,10 @@ namespace Menu {
     std::wstring editBuffer, notifText;
     std::chrono::time_point<std::chrono::high_resolution_clock> notifEnd, resetTime;
 
+    // Untuk fitur jump-to-letter (tekan huruf untuk lompat ke item)
+    wchar_t lastJumpChar = 0;
+    int lastJumpIndex = -1;
+
     void ReloadUI() {
         auto& ui = ConfigManager::Instance().GetUI();
 
@@ -34,7 +38,7 @@ namespace Menu {
         hSelBrush    = CreateSolidBrush(ui.selColor);
         hEditBrush   = CreateSolidBrush(ui.editColor);
         hCatBrush    = CreateSolidBrush(ui.catColor);
-        hNotifBrush  = CreateSolidBrush(RGB(40, 80, 40));
+        hNotifBrush  = CreateSolidBrush(RGB(80, 55, 25));
 
         hTitleFont = CreateFontW(ui.titleSize, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH, ui.fontName.c_str());
@@ -56,10 +60,20 @@ namespace Menu {
         g_hwnd = hwnd;
         isMenuActive = isEditing = hasNotif = pendingClose = resetConfirm = false;
         selectedRow = selectedCol = 0;
+        lastJumpChar = 0;
+        lastJumpIndex = -1;
         ReloadUI();
     }
 
     void Uninit() {}
+
+    bool IsOpenMenu() { return isMenuActive; }
+
+    RECT GetClipRect() { 
+        RECT r = menuCanvas;
+        OffsetRect(&r, offsetX, offsetY);
+        return r; 
+    }
 
     void FR(RECT r, HBRUSH b) {
         OffsetRect(&r, offsetX, offsetY);
@@ -101,30 +115,94 @@ namespace Menu {
         editBuffer = L"";
     }
 
-    LRESULT ImplWin32_WndProcHandler(WNDPROC oWndProc, HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-        if (uMsg == WM_KEYDOWN) {
-            if (lParam & 0x40000000) return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
-            auto& cfg = ConfigManager::Instance();
+    void JumpToLetter(wchar_t ch) {
+        auto& cfg = ConfigManager::Instance();
+        const auto& items = cfg.GetItems();
+        int total = (int)items.size();
+        if (total == 0) return;
 
-            if (ConfigManager::CheckHotkey(cfg.GetToggleMenu())) {
+        wchar_t upperCh = towupper(ch);
+
+        std::vector<int> matches;
+        for (int i = 0; i < total; i++) {
+            if (!items[i].displayName.empty()) {
+                wchar_t firstCh = towupper(items[i].displayName[0]);
+                if (firstCh == upperCh) matches.push_back(i);
+            }
+        }
+        if (matches.empty()) return;
+
+        int targetIdx;
+        if (lastJumpChar == upperCh && lastJumpIndex >= 0) {
+            int nextPos = 0;
+            for (size_t k = 0; k < matches.size(); k++) {
+                if (matches[k] == lastJumpIndex) {
+                    nextPos = (k + 1) % matches.size();
+                    break;
+                }
+            }
+            targetIdx = matches[nextPos];
+        } else {
+            targetIdx = matches[0];
+        }
+
+        selectedRow = targetIdx;
+        lastJumpChar = upperCh;
+        lastJumpIndex = targetIdx;
+    }
+
+    LRESULT ImplWin32_WndProcHandler(WNDPROC oWndProc, HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+        auto& cfg = ConfigManager::Instance();
+
+        // ==== BLOCK INPUT GAME saat menu aktif ====
+        if (isMenuActive) {
+            switch (uMsg) {
+                case WM_KEYDOWN:
+                case WM_KEYUP:
+                case WM_SYSKEYDOWN:
+                case WM_SYSKEYUP:
+                case WM_CHAR:
+                case WM_SYSCHAR:
+                case WM_DEADCHAR:
+                case WM_LBUTTONDOWN:
+                case WM_LBUTTONUP:
+                case WM_LBUTTONDBLCLK:
+                case WM_RBUTTONDOWN:
+                case WM_RBUTTONUP:
+                case WM_RBUTTONDBLCLK:
+                case WM_MBUTTONDOWN:
+                case WM_MBUTTONUP:
+                case WM_MOUSEWHEEL:
+                case WM_MOUSEMOVE:
+                    if (uMsg != WM_KEYDOWN && uMsg != WM_SYSKEYDOWN) return 0;
+                    break;
+            }
+        }
+
+        if (uMsg == WM_KEYDOWN || uMsg == WM_SYSKEYDOWN) {
+            bool isRepeat = (lParam & 0x40000000) != 0;
+
+            if (!isRepeat && ConfigManager::CheckHotkey(cfg.GetToggleMenu())) {
                 if (isEditing) { isEditing = false; editBuffer = L""; }
                 isMenuActive = !isMenuActive;
+                lastJumpChar = 0; lastJumpIndex = -1;
                 return 0;
             }
-            if (ConfigManager::CheckHotkey(cfg.GetReloadConfig())) {
+            if (!isRepeat && ConfigManager::CheckHotkey(cfg.GetReloadConfig())) {
                 cfg.Load(cfg.GetIniPath());
                 ReloadUI();
                 if (isMenuActive) ShowNotif(L"Config Reloaded!", 1200);
                 return 0;
             }
-            if (ConfigManager::CheckHotkey(cfg.GetLoadSnapshot())) {
+            if (!isRepeat && ConfigManager::CheckHotkey(cfg.GetLoadSnapshot())) {
                 cfg.LoadSnapshot();
                 if (isMenuActive) ShowNotif(L"Loaded!", 1200);
                 return 0;
             }
+
             if (!isMenuActive) return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
 
-            if (ConfigManager::CheckHotkey(cfg.GetSaveConfig())) {
+            if (!isRepeat && ConfigManager::CheckHotkey(cfg.GetSaveConfig())) {
                 ApplyEdit();
                 cfg.Save(cfg.GetIniPath());
                 cfg.SaveSnapshot();
@@ -133,7 +211,7 @@ namespace Menu {
                 return 0;
             }
 
-            if (ConfigManager::CheckHotkey(cfg.GetResetAll())) {
+            if (!isRepeat && ConfigManager::CheckHotkey(cfg.GetResetAll())) {
                 auto now = std::chrono::high_resolution_clock::now();
                 if (resetConfirm &&
                     std::chrono::duration_cast<std::chrono::milliseconds>(now - resetTime).count() < 2000) {
@@ -149,28 +227,47 @@ namespace Menu {
             }
 
             int total = (int)cfg.GetItems().size();
+
             if (isEditing) {
                 if (wParam >= '0' && wParam <= '9') { if (editBuffer.length() < 4) editBuffer += (wchar_t)wParam; return 0; }
-                if (wParam == VK_BACK) { if (!editBuffer.empty()) editBuffer.pop_back(); return 0; }
+                if (wParam == VK_BACK)   { if (!editBuffer.empty()) editBuffer.pop_back(); return 0; }
                 if (wParam == VK_DELETE) { editBuffer.clear(); return 0; }
-                if (wParam == VK_RETURN) { ApplyEdit(); return 0; }
-                if (wParam == VK_ESCAPE) { isEditing = false; editBuffer = L""; return 0; }
-                if (wParam == VK_LEFT)   { ApplyEdit(); selectedCol = 0; return 0; }
-                if (wParam == VK_RIGHT)  { ApplyEdit(); selectedCol = 1; return 0; }
-                if (wParam == VK_TAB)    { ApplyEdit(); selectedCol = 1 - selectedCol; return 0; }
+                if (!isRepeat && wParam == VK_RETURN) { ApplyEdit(); return 0; }
+                if (!isRepeat && wParam == VK_ESCAPE) { isEditing = false; editBuffer = L""; return 0; }
+                if (!isRepeat && wParam == VK_LEFT)   { ApplyEdit(); selectedCol = 0; return 0; }
+                if (!isRepeat && wParam == VK_RIGHT)  { ApplyEdit(); selectedCol = 1; return 0; }
+                if (!isRepeat && wParam == VK_TAB)    { ApplyEdit(); selectedCol = 1 - selectedCol; return 0; }
+                return 0;
             } else {
-                if (wParam == VK_UP)    { if (selectedRow > 0) selectedRow--; return 0; }
-                if (wParam == VK_DOWN)  { if (selectedRow < total - 1) selectedRow++; return 0; }
-                if (wParam == VK_LEFT)  { selectedCol = 0; return 0; }
-                if (wParam == VK_RIGHT) { selectedCol = 1; return 0; }
-                if (wParam == VK_TAB)   { selectedCol = 1 - selectedCol; return 0; }
+                // Navigasi dengan tekan tahan (auto-repeat diperbolehkan)
+                if (wParam == VK_UP)   { if (selectedRow > 0) selectedRow--; lastJumpChar = 0; return 0; }
+                if (wParam == VK_DOWN) { if (selectedRow < total - 1) selectedRow++; lastJumpChar = 0; return 0; }
+                if (wParam == VK_HOME) { selectedRow = 0; lastJumpChar = 0; return 0; }
+                if (wParam == VK_END)  { selectedRow = total - 1; lastJumpChar = 0; return 0; }
+                if (wParam == VK_PRIOR){ selectedRow = std::max(0, selectedRow - 5); lastJumpChar = 0; return 0; }
+                if (wParam == VK_NEXT) { selectedRow = std::min(total - 1, selectedRow + 5); lastJumpChar = 0; return 0; }
+
+                if (!isRepeat && wParam == VK_LEFT)  { selectedCol = 0; return 0; }
+                if (!isRepeat && wParam == VK_RIGHT) { selectedCol = 1; return 0; }
+                if (!isRepeat && wParam == VK_TAB)   { selectedCol = 1 - selectedCol; return 0; }
+
                 if (wParam >= '0' && wParam <= '9') {
                     if (selectedRow >= 0 && selectedRow < total) { isEditing = true; editBuffer = (wchar_t)wParam; }
                     return 0;
                 }
-                if (wParam == VK_ESCAPE) { isMenuActive = false; return 0; }
+
+                // Jump to item by letter
+                if (!isRepeat && wParam >= 'A' && wParam <= 'Z') {
+                    JumpToLetter((wchar_t)wParam);
+                    return 0;
+                }
+
+                if (!isRepeat && wParam == VK_ESCAPE) { isMenuActive = false; lastJumpChar = 0; return 0; }
+
+                return 0;
             }
         }
+
         return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
     }
 
@@ -233,24 +330,24 @@ namespace Menu {
         cy += headerH;
 
         FR({0, cy, ui.menuWidth, cy + catH}, hCatBrush);
-        DT({5, cy, ui.menuWidth, cy + catH}, hFont, L"-- Weapons --", DT_LEFT | DT_VCENTER | DT_SINGLELINE, RGB(255, 150, 100));
+        DT({5, cy, ui.menuWidth, cy + catH}, hFont, L"-- Weapons --", DT_LEFT | DT_VCENTER | DT_SINGLELINE, RGB(255, 180, 90));
         cy += catH;
 
         for (int i = 0; i < wc; i++) { DrawRow(i, cy, items[i].displayName, items[i].saleThreshold, items[i].buyThreshold, ui); cy += ui.rowHeight; }
 
         FR({0, cy, ui.menuWidth, cy + catH}, hCatBrush);
-        DT({5, cy, ui.menuWidth, cy + catH}, hFont, L"-- Resources --", DT_LEFT | DT_VCENTER | DT_SINGLELINE, RGB(100, 200, 100));
+        DT({5, cy, ui.menuWidth, cy + catH}, hFont, L"-- Resources --", DT_LEFT | DT_VCENTER | DT_SINGLELINE, RGB(230, 200, 120));
         cy += catH;
 
         for (int i = wc; i < (int)items.size(); i++) { DrawRow(i, cy, items[i].displayName, items[i].saleThreshold, items[i].buyThreshold, ui); cy += ui.rowHeight; }
 
         FR({0, cy, ui.menuWidth, cy + headerH}, hHeaderBrush);
-        DT({5, cy, ui.menuWidth, cy + headerH}, hSmallFont, L"CTRL+R = Reset All", DT_LEFT | DT_VCENTER | DT_SINGLELINE, ui.textColor);
+        DT({5, cy, ui.menuWidth, cy + headerH}, hSmallFont, L"A-Z=Jump | UP/DN Hold | CTRL+R=Reset", DT_LEFT | DT_VCENTER | DT_SINGLELINE, ui.textColor);
 
         if (hasNotif) {
             RECT nr = {ui.menuWidth / 4, menuH / 2 - 15, ui.menuWidth * 3 / 4, menuH / 2 + 15};
             FR(nr, hNotifBrush);
-            DT(nr, hFont, notifText.c_str(), DT_CENTER | DT_VCENTER | DT_SINGLELINE, RGB(200, 255, 200));
+            DT(nr, hFont, notifText.c_str(), DT_CENTER | DT_VCENTER | DT_SINGLELINE, RGB(255, 235, 180));
         }
     }
     void SetContext(HDC newHdc) { hdc = newHdc; }

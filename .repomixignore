@@ -1,0 +1,31 @@
+# Build output
+build/**
+
+# Backup folders
+src_backup_*/**
+
+# MinHook submodule (library pihak ketiga, bukan kode Anda)
+src/include/minhook/**
+
+# Binary & compiled files
+*.dll
+*.exe
+*.a
+*.o
+*.obj
+
+# IDE / Editor
+.vscode/**
+.idea/**
+
+# Repomix output sendiri (jangan recursive)
+repomix-output.xml
+
+# Screenshot & images
+*.jpg
+*.png
+*.jpeg
+*.gif
+
+# Git internals
+.git/**
