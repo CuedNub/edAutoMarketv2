@@ -6,7 +6,7 @@
 
 **edAutoMarket v2.1** is an advanced *Auto Trading* (Auto Buy/Sell) modification for the game **Stronghold Crusader HD**. Set stock thresholds for goods in your granary and armory — if a resource exceeds the sell threshold it will be automatically sold, and if it falls below the buy threshold it will be automatically purchased. All navigation is done entirely with the keyboard, without any mouse clicks.
 
-This mod is a major fork of **Ciptik's** original source code, focusing on keyboard-driven efficiency, a clean **config / preset separation**, full UI theme customization with an authentic **Stronghold Crusader HD color scheme**, and DirectDraw proxy stability for 100% compatibility with other popular modifications such as SHCPlayer.
+This mod is a major fork of **Ciptik's** original source code, focusing on keyboard-driven efficiency, a powerful **multi-preset system**, popup-based workflow, full UI theme customization with an authentic **Stronghold Crusader HD color scheme**, and DirectDraw proxy stability for 100% compatibility with other popular modifications such as SHCPlayer.
 
 ---
 
@@ -16,13 +16,18 @@ This mod is a major fork of **Ciptik's** original source code, focusing on keybo
 
 ## 🆕 What's New in v2.1
 
+* 📚 **Multi-Preset System** — Save unlimited threshold presets (e.g. "Attack", "Defense", "Economy") and switch between them instantly during gameplay.
+* 💾 **Save Preset Popup** — Press `CTRL+SHIFT+S` to open a popup dialog with three options: **[U]** Update active preset, **[A]** Add new preset, **[D]** Delete active preset.
+* 📂 **Load Preset Popup** — Press `CTRL+SHIFT+L` to open a scrollable list of all your presets. Navigate with `↑/↓` and press `Enter` to load.
+* 🆘 **Help Menu (F1)** — Press `F1` in-game to display a popup listing all currently active hotkeys. The list dynamically reflects any custom hotkeys defined in `ddraw.ini`.
+* 🖱️ **New Default: ALT+M** — Toggle Menu hotkey changed from just `M` to `ALT+M` to prevent accidental menu popups during regular gameplay.
 * 🎨 **Authentic Stronghold Crusader HD Color Theme** — Warm parchment brown, wooden panels, and Crusader gold trim baked in as default.
 * 🔒 **Full Game Input Blocking** — When the menu is open, **all** keyboard and mouse input is intercepted so the game's built-in hotkeys (map scroll, unit selection, etc.) are frozen. No more accidental map panning while editing values.
 * ⏩ **Hold-to-Scroll Navigation** — `↑` / `↓` arrow keys now support keyboard auto-repeat. Hold them down to smoothly scroll through the item list.
 * 🔤 **Jump-to-Letter Navigation** — Press any letter key (A–Z) to jump to an item starting with that letter. Press the same letter again to cycle through the next match (e.g., `W` → Wheat → Wood → Wheat…).
 * 📁 **Renamed Config Files** — `automarket.ini` → **`ddraw.ini`**, `automarketsave.ini` → **`ddrawsave.ini`** for cleaner file naming that matches the DLL.
-* 🧹 **Clean Config Separation** — `ddraw.ini` now holds **only** settings (hotkeys, UI, colors, defaults). All item thresholds live exclusively in `ddrawsave.ini` as a preset file.
-* 💬 **Self-Documented Config** — `ddraw.ini` is now auto-generated with inline comments explaining every single key.
+* 🧹 **Clean Config Separation** — `ddraw.ini` holds **only** settings (hotkeys, UI, colors, defaults). All presets and item thresholds live exclusively in `ddrawsave.ini`.
+* 💬 **Self-Documented Config** — `ddraw.ini` is auto-generated with inline comments explaining every single key.
 * 🛡️ **Safer Reset** — `CTRL+R` (Reset All) only resets values in memory; your `ddrawsave.ini` preset file is **never** overwritten by the reset action.
 
 ---
@@ -30,10 +35,11 @@ This mod is a major fork of **Ciptik's** original source code, focusing on keybo
 ## ✨ Core Features
 
 * ⌨️ **Full Keyboard-Driven UI** — Complete navigation and number input using the keyboard, zero mouse clicks required.
+* 📚 **Multi-Preset Management** — Create, update, delete, and switch between unlimited threshold presets on the fly.
 * 🗂️ **Categorized Item List** — Items are neatly grouped into **Weapons (A–Z)** and **Resources (A–Z)** with clear display names.
 * 📁 **Config + Preset File System:**
   * **`ddraw.ini`** — Main configuration file: hotkeys, UI theme, fonts, colors, defaults.
-  * **`ddrawsave.ini`** — Preset file: only stores your saved sell/buy thresholds. Can be loaded/saved mid-game.
+  * **`ddrawsave.ini`** — Preset file: stores all named presets with their sell/buy thresholds.
 * 🎨 **Fully Customizable UI Theme** — Customize menu colors (RGB), font family, font sizes, menu width, row height, and screen position offsets via `ddraw.ini`.
 * ⚡ **Adjustable Trade Frequency** — Control how fast the mod checks and executes market trades in milliseconds (`TradeFrequencyMs`).
 * 🔄 **Silent Auto-Reset** — Thresholds are automatically reset to defaults when a match/skirmish ends (returning to the main menu), without any intrusive notifications.
@@ -55,18 +61,19 @@ For players who simply want to use this mod in-game without compiling the source
 2. Extract `ddraw.zip` and copy/move the **`ddraw.dll`** file into the game's root directory (next to `Stronghold_Crusader.exe`).
 3. Done! The mod is now installed.
 
-> 💡 **Upgrading from v2.0?** Delete the old `automarket.ini` and `automarketsave.ini` files before running the new version. New config files will be regenerated automatically.
+> 💡 **Upgrading from v2.0?** Delete the old `automarket.ini`, `automarketsave.ini`, `ddraw.ini`, and `ddrawsave.ini` files before running the new version. New config files will be regenerated automatically with the new preset structure.
 
 ### 3. How to Use In-Game
 1. Launch *Stronghold Crusader HD* as usual.
 2. Enter a game mode (Skirmish / Campaign).
-3. Press **`M`** on your keyboard to open the *Auto Market* menu.
+3. Press **`ALT + M`** on your keyboard to open the *Auto Market* menu.
 4. Navigate the list:
    * Use **`↑ / ↓`** (hold to scroll fast) to select an item.
    * Press any letter **A–Z** to jump to an item starting with that letter (press again to cycle).
 5. Press **`TAB`** or **`← / →`** to switch between the Sell/Buy columns.
 6. Type the threshold value directly (0–9999), press **`Enter`** to confirm.
-7. Press **`CTRL + SHIFT + S`** to save your preset to `ddrawsave.ini`.
+7. Press **`CTRL + SHIFT + S`** to open the Save Preset popup and manage your presets.
+8. Press **`F1`** anytime to view a full list of active hotkeys.
 
 ---
 
@@ -78,11 +85,12 @@ The base source code of this modification is derived from this GitHub repository
 * **Ciptik's Original Functionality:** Hooks the game's DirectDraw functions to render the menu and uses *memory reading/writing* via MinHook to trigger market transactions without any mouse cursor movement. Originally used `dplayx.dll`.
 * **What's New in edAutoMarket v2.x:** 
   1. Complete UI redesign from a mouse-button system into a *Keyboard-Driven Table*.
-  2. Added a *Config + Preset System* (`ddraw.ini` & `ddrawsave.ini`).
-  3. Added *Session-Aware* logic (Auto-Reset when a match ends).
-  4. Full UI customization (colors, fonts, sizes, offsets, trade frequency).
-  5. Migrated from `dplayx.dll` to `ddraw.dll` with *export function Wrappers* to support *multi-modding*.
-  6. Full game input blocking, hold-to-scroll, jump-to-letter, and native Stronghold Crusader HD theme (v2.1).
+  2. Added a *Multi-Preset System* with popup-based Save/Load management.
+  3. Added an in-game *Help Menu* (F1) that dynamically displays active hotkeys.
+  4. Added *Session-Aware* logic (Auto-Reset when a match ends).
+  5. Full UI customization (colors, fonts, sizes, offsets, trade frequency).
+  6. Migrated from `dplayx.dll` to `ddraw.dll` with *export function Wrappers* to support *multi-modding*.
+  7. Full game input blocking, hold-to-scroll, jump-to-letter, and native Stronghold Crusader HD theme.
 
 ---
 
@@ -107,8 +115,8 @@ If you want additional features such as *Shift+Click to recruit 10 units*, repla
 
 | Hotkey | Function / Description |
 | :--- | :--- |
-| `M` | Opens or closes the Auto Market menu in-game. |
-| `CTRL + SHIFT + L` | **Load Preset:** Instantly reloads item thresholds from `ddrawsave.ini` without restarting the game ("Loaded!"). |
+| `ALT + M` | Opens or closes the Auto Market menu in-game. |
+| `CTRL + SHIFT + L` | **Load Preset Popup:** Opens a scrollable list of all saved presets. Navigate with `↑/↓`, press `Enter` to load. |
 | `CTRL + L` | **Reload Config:** Re-reads `ddraw.ini` from disk and applies new hotkeys, colors, fonts, and layout instantly. |
 
 ### In-Menu Hotkeys (Only Active When Menu Is Open)
@@ -125,9 +133,28 @@ If you want additional features such as *Shift+Click to recruit 10 units*, repla
 | `Backspace` | Deletes the last digit typed. |
 | `Delete` | Clears the entire input buffer. |
 | `Esc` | Cancels typing or closes the menu. |
-| `CTRL + SHIFT + S` | **Save:** Writes current values to `ddrawsave.ini` and updates `ddraw.ini`. Shows a "Saved!" notification and closes the menu. |
+| `F1` | **Help Popup:** Displays all currently active hotkeys (dynamically read from `ddraw.ini`). |
+| `CTRL + SHIFT + S` | **Save Preset Popup:** Opens a dialog with 3 options: `[U]` Update active, `[A]` Add new, `[D]` Delete active. |
 | `CTRL + R` (2x) | **Reset All:** Resets all thresholds in memory to default values. Press twice within 2 seconds to confirm. **Does NOT modify `ddrawsave.ini`.** |
 | *(Automatic)* | When a match/skirmish ends (win/lose/quit), the mod will **automatically reset** all values to *defaults*. |
+
+### Popup Sub-Hotkeys
+
+**Save Preset Popup (CTRL+SHIFT+S):**
+| Hotkey | Function |
+| :--- | :--- |
+| `U` | Update the active preset with current values. |
+| `A` | Open input field to create a new preset. |
+| `D` | Delete the active preset (requires Y/N confirmation). |
+| `ESC` | Close popup without changes. |
+
+**Load Preset Popup (CTRL+SHIFT+L):**
+| Hotkey | Function |
+| :--- | :--- |
+| `↑ / ↓` | Navigate the preset list. |
+| `Home / End` | Jump to first / last preset. |
+| `Enter` | Load the selected preset. |
+| `ESC` | Close popup without loading. |
 
 > 🔒 **Input Blocking:** While the menu is open, **all** keyboard and mouse events are blocked from reaching the game. Your map won't scroll and units won't get selected while you edit values.
 
@@ -139,108 +166,78 @@ The mod uses **two separate files** — one for settings and one for saved prese
 
 ### 📄 `ddraw.ini` — Configuration File
 
-Contains hotkeys, UI colors, fonts, and default values. This file is **auto-generated with helpful inline comments** the first time you press `CTRL+SHIFT+S`. Press **`CTRL + L`** in-game to reload changes on the fly.
+Contains hotkeys, UI colors, fonts, and default values. This file is **auto-generated with helpful inline comments** the first time you press `CTRL+SHIFT+S` and confirm any preset action. Press **`CTRL + L`** in-game to reload changes on the fly.
 
 Sections included:
-* `[Hotkeys]` — All keyboard shortcuts.
+* `[Hotkeys]` — All keyboard shortcuts (each with `_Ctrl`, `_Shift`, `_Alt` modifiers).
 * `[Advanced]` — Trade frequency in milliseconds.
 * `[UI]` — Menu dimensions, fonts, and colors (RGB).
-* `[Defaults]` — The starting sell/buy values used when no preset is loaded.
+* `[Defaults]` — The starting sell/buy values used when creating new presets or resetting.
 
 ### 📄 `ddrawsave.ini` — Preset File
 
-Contains **only** your saved sell/buy thresholds per item, split into `[Weapons]` and `[Resources]` sections. This file is:
-* **Written** only when you press `CTRL + SHIFT + S`.
-* **Loaded** automatically on game start (if it exists), and manually via `CTRL + SHIFT + L`.
-* **Never touched** by the Reset All (`CTRL + R`) action, so your preset is always safe.
+Contains all your saved presets. This file is:
+* **Written** whenever you Update, Add, or Delete a preset via the Save Popup.
+* **Loaded** automatically on game start (last active preset is restored).
+* **Never touched** by the Reset All (`CTRL + R`) action, so your presets are always safe.
+
+**Preset Structure Example:**
+```ini
+[Presets]
+List=Default,Attack,Defense,Economy
+Active=Attack
+
+[Preset_Default_Weapons]
+Bows=500,0
+Swords=500,0
+...
+
+[Preset_Attack_Weapons]
+Bows=100,50
+Swords=200,100
+...
+```
 
 ---
 
-## 🎨 Sample `ddraw.ini` (Auto-Generated)
+## 🛠️ How to Change Hotkeys
 
+You don't need to recompile the code to change hotkeys. Simply edit **`ddraw.ini`** in your game folder using Notepad.
+
+### Structure of a Hotkey
+Each hotkey has 4 lines:
+1. **Main Key** — Virtual-Key Code in **decimal** format.
+2. **`_Ctrl`** — `1` = must hold CTRL, `0` = must NOT hold CTRL.
+3. **`_Shift`** — `1` = must hold SHIFT, `0` = must NOT hold SHIFT.
+4. **`_Alt`** — `1` = must hold ALT, `0` = must NOT hold ALT.
+
+### Example: Change Toggle Menu from ALT+M to just M
 ```ini
-; ============================================
-; edAutoMarket v2.1 - Configuration File
-; ============================================
-; This file is ONLY for configuration (hotkeys, UI, colors).
-; Item sell/buy values are stored in ddrawsave.ini.
-; Press CTRL+L in-game to reload without restart.
-; ============================================
-
-[Hotkeys]
-; Format: decimal Virtual-Key Code
-; Reference: 77=M  76=L  82=R  83=S  65-90=A-Z  112-123=F1-F12
-; _Ctrl and _Shift: 1 = required, 0 = not required
-
-; Toggle Auto Market menu (default: M)
 ToggleMenu=77
 ToggleMenu_Ctrl=0
 ToggleMenu_Shift=0
-
-; Save configuration + preset snapshot (default: CTRL+SHIFT+S)
-SaveConfig=83
-SaveConfig_Ctrl=1
-SaveConfig_Shift=1
-
-; Load preset from ddrawsave.ini (default: CTRL+SHIFT+L)
-LoadSnapshot=76
-LoadSnapshot_Ctrl=1
-LoadSnapshot_Shift=1
-
-; Reset all thresholds to defaults, press twice to confirm (default: CTRL+R)
-ResetAll=82
-ResetAll_Ctrl=1
-ResetAll_Shift=0
-
-; Reload ddraw.ini without restarting the game (default: CTRL+L)
-ReloadConfig=76
-ReloadConfig_Ctrl=1
-ReloadConfig_Shift=0
-
-[Advanced]
-; Trade check interval in milliseconds (default: 100)
-; Lower = faster trading, but more CPU usage
-TradeFrequencyMs=100
-
-[UI]
-MenuWidth=400
-RowHeight=22
-OffsetX=0
-OffsetY=0
-
-FontName=Consolas
-FontSize=16
-TitleSize=20
-
-; --- UI Colors (format: R,G,B) ---
-; Default theme: Stronghold Crusader HD (wood brown & gold)
-
-BgColor=58,40,22
-HeaderColor=92,62,30
-RowColor=72,50,28
-SelColor=140,95,40
-EditColor=170,110,35
-CatColor=105,72,35
-
-; --- Text Colors (format: R,G,B) ---
-
-TextColor=245,220,155
-HighlightTextColor=255,245,200
-EditTextColor=255,255,120
-TitleColor=255,200,80
-
-[Defaults]
-; Default sell/buy thresholds used at game start
-; (when ddrawsave.ini does not exist)
-DefaultSale=500
-DefaultBuy=0
+ToggleMenu_Alt=0
 ```
 
-### 📝 Key Code Reference (Decimal VK Codes)
-* `77` = M  |  `76` = L  |  `82` = R  |  `83` = S
-* `65` = A  ... through ... `90` = Z
-* `112` = F1 |  `113` = F2 ... through ... `123` = F12
-* `32` = Spacebar
+### Example: Change Help from F1 to F5
+```ini
+Help=116
+Help_Ctrl=0
+Help_Shift=0
+Help_Alt=0
+```
+
+### Quick Reference: Popular Key Codes (Decimal)
+| Key | Code | | Key | Code |
+| :--- | :--- | :--- | :--- | :--- |
+| **A–Z** | 65–90 | | **F1–F12** | 112–123 |
+| **0–9** | 48–57 | | **ENTER** | 13 |
+| **M** | 77 | | **SPACE** | 32 |
+| **L** | 76 | | **ESC** | 27 |
+| **R** | 82 | | **TAB** | 9 |
+| **S** | 83 | | **BACKSPACE** | 8 |
+
+> 💡 **Tip:** After editing `ddraw.ini`, press **`CTRL+L`** in-game to reload without restarting the game. Press **`F1`** to verify your new hotkeys are active.
 
 ---
 
